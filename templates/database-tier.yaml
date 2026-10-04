@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Project2 - Database Tier: RDS MySQL and DB security group'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: project2
+    Description: Name prefix for all resources
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: RDS instance size
+
+  DBName:
+    Type: String
+    Default: project2db
+    Description: Database name
+
+  DBUser:
+    Type: String
+    Default: admin
+    Description: Master user for the database
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Password for the database master user
+
+Resources:
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow MySQL traffic from app tier
+      VpcId: !ImportValue 'project2-vpc-id'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !ImportValue 'project2-ec2-sg-id'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-db-sg'
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets available for the database
+      SubnetIds:
+        - !ImportValue 'project2-db-subnet-1-id'
+        - !ImportValue 'project2-db-subnet-2-id'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-db-subnet-group'
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-db'
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: mysql
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: 20
+      StorageType: gp2
+      PubliclyAccessible: false
+      MultiAZ: true
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-db'
+
+Outputs:
+  DatabaseEndpoint:
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
+    Description: RDS database endpoint
+    Export:
+      Name: !Sub '${EnvironmentName}-db-endpoint'
+
+  DatabasePort:
+    Value: !GetAtt DatabaseInstance.Endpoint.Port
+    Description: RDS database port
+    Export:
+      Name: !Sub '${EnvironmentName}-db-port'
